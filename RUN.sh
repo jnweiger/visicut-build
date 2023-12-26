@@ -9,6 +9,11 @@
 # Tested in: docker run --rm -ti -v $PWD:/mnt ubuntu:22.04 bash; /mnt/RUN.sh
 #    -> follow the instructions... and all deliverables should (somewhat unreliably) build.
 #       you may need to manually repeat some of the distribute.sh calls.
+#
+# CAUTION:
+# keep in sync with 
+#   - https://github.com/t-oster/VisicutBuilder/blob/master/build.sh
+#   - docker image registry.gitlab.com/t-oster/visicutbuildservice:/app/build.sh
 
 visicut_tag=master
 liblasercut_tag=master
@@ -16,28 +21,34 @@ liblasercut_tag=master
 depapt=
 deperr=
 
-checkcmd() {
-if [ -z "$(which $1)" ]; then
-  test -n "$2" && deperr="$deperr
+check_installed() {
+  # $1 is a command name, that we want to find in the PATH.
+  #    or an existing absolute path name in the filesystem (dir or file)
+  # $2 is an optional instructive error message if needed, or ""
+  # $3 is an optional apt package name, if different from $1
+  if [ -z "$(which $1)" -a ! -e "$1" ]; then
+    test -n "$2" && deperr="$deperr
 ERROR: $2
 "
-  test -z "$2$3" && depapt="$depapt $1"
-  test -n "$3"   && depapt="$depapt $3"
-fi
+    test -z "$2$3" && depapt="$depapt $1"
+    test -n "$3"   && depapt="$depapt $3"
+  fi
 }
 
 
-checkcmd wget
-checkcmd git
-checkcmd make
-checkcmd zip
-checkcmd unzip
-checkcmd checkinstall
-checkcmd makensis "" nsis
-checkcmd mvn "" maven
-checkcmd rsvg-convert "" librsvg2-bin
-checkcmd fusermount "" fuse
-checkcmd appimagecraft "appimagecraft not installed! Try:
+check_installed wget
+check_installed git
+check_installed make
+check_installed zip
+check_installed unzip
+check_installed checkinstall
+check_installed makensis "" nsis
+check_installed mvn "" maven
+check_installed rsvg-convert "" librsvg2-bin
+check_installed fusermount "" fuse
+# not sure where this font is used, but it is seen in t-oster's Dockerfile:
+check_installed /usr/share/fonts/truetype/noto/NotoSans-Medium.ttf "" fonts-noto-extra
+check_installed appimagecraft "appimagecraft not installed! Try:
     sudo wget -O  /usr/local/bin/appimagecraft https://github.com/TheAssassin/appimagecraft/releases/download/continuous/appimagecraft-x86_64.AppImage
     sudo chmod +x /usr/local/bin/appimagecraft"
 
@@ -89,11 +100,11 @@ echo "or enter something different..."
 read a
 test -n "$a" && VERSION=$a
 
-propfile=src/main/resources/de/thomas_oster/visicut/gui/resources/VisicutApp.properties
-sed -i -e "s/^Application.version =.*\$/Application.version = $VERSION/" $propfile
+propfiles=src/main/resources/de/thomas_oster/visicut/gui/resources/VisicutApp*.properties
+sed -i -e "s/^Application.version =.*\$/Application.version = $VERSION/" $propfiles
 ./generatesplash.sh
 make dist
-sed -i -e "s/^Application.version =.*\$/Application.version =/" $propfile	# that how it is in git ...
+sed -i -e "s/^Application.version =.*\$/Application.version =/" $propfiles	# revert how it is in git ...
 
 env NO_BUILD=1 ./distribute/distribute.sh windows-nsis
 env NO_BUILD=1 ./distribute/distribute.sh macos-bundle
